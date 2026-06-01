@@ -7,14 +7,26 @@ from app.services.etims import ETIMSComplianceService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
 
 # High-performance global dictionary block for Idempotency Guard
 PROCESSED_REQUESTS = {}
 
 async def process_compliance_pipeline(payload: MpesaWebhookPayload):
     checkout_request_id = payload.Body.stkCallback.CheckoutRequestID
-    logger.info(f"[Background Task] Starting compliance pipeline for {checkout_request_id}")
+
+    # Extract MpesaReceiptNumber for structured logging context
+    mpesa_receipt_number = None
+    if payload.Body.stkCallback.CallbackMetadata and payload.Body.stkCallback.CallbackMetadata.Item:
+        for item in payload.Body.stkCallback.CallbackMetadata.Item:
+            if item.Name == "MpesaReceiptNumber":
+                mpesa_receipt_number = item.Value
+                break
+
+    log_context = {"checkout_request_id": checkout_request_id}
+    if mpesa_receipt_number:
+        log_context["mpesa_receipt_number"] = mpesa_receipt_number
+
+    logger.info("[Background Task] Starting compliance pipeline", extra=log_context)
 
     # Execute Ledger Service mapping and append
     await LedgerAutomationService.append_transaction_record(payload)
@@ -25,16 +37,30 @@ async def process_compliance_pipeline(payload: MpesaWebhookPayload):
     # Execute ETIMS API submission
     await ETIMSComplianceService.generate_electronic_invoice(payload)
 
-    logger.info(f"[Background Task] Completed compliance pipeline for {checkout_request_id}")
+    logger.info("[Background Task] Completed compliance pipeline", extra=log_context)
+
+
+@router.get("/healthz")
+async def health_check():
+    return {
+        "status": "healthy",
+        "metrics": {
+            "cache_utilization": {
+                "current_count": len(PROCESSED_REQUESTS),
+                "maximum_capacity": 1000
+            }
+        }
+    }
 
 
 @router.post("/callback")
 async def mpesa_callback(payload: MpesaWebhookPayload, background_tasks: BackgroundTasks):
     checkout_request_id = payload.Body.stkCallback.CheckoutRequestID
+    log_context = {"checkout_request_id": checkout_request_id}
 
     # Idempotency check
     if checkout_request_id in PROCESSED_REQUESTS:
-        logger.info(f"Duplicate CheckoutRequestID detected: {checkout_request_id}. Skipping processing.")
+        logger.info("Duplicate CheckoutRequestID detected. Skipping processing.", extra=log_context)
         return {"status": "success", "message": "Callback processed"}
 
     # Lightweight eviction guard (Memory Management)
@@ -46,7 +72,7 @@ async def mpesa_callback(payload: MpesaWebhookPayload, background_tasks: Backgro
     PROCESSED_REQUESTS[checkout_request_id] = True
 
     # Fast deterministic log
-    logger.info(f"Received M-Pesa webhook for CheckoutRequestID: {checkout_request_id}")
+    logger.info("Received M-Pesa webhook", extra=log_context)
 
     # Hand off payload processing to background worker
     background_tasks.add_task(process_compliance_pipeline, payload)

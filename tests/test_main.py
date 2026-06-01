@@ -6,9 +6,14 @@ from app.main import app
 client = TestClient(app)
 
 def test_health_check():
-    response = client.get("/health")
+    response = client.get("/api/v1/mpesa/healthz")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    json_response = response.json()
+    assert json_response["status"] == "healthy"
+    assert "metrics" in json_response
+    assert "cache_utilization" in json_response["metrics"]
+    assert "current_count" in json_response["metrics"]["cache_utilization"]
+    assert json_response["metrics"]["cache_utilization"]["maximum_capacity"] == 1000
 
 @patch("asyncio.sleep")
 @patch("httpx.AsyncClient.post")

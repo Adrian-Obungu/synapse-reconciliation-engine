@@ -8,13 +8,13 @@ class LedgerAutomationService:
     async def append_transaction_record(payload: MpesaWebhookPayload):
         stk_callback = payload.Body.stkCallback
         checkout_request_id = stk_callback.CheckoutRequestID
+        log_context = {"checkout_request_id": checkout_request_id}
 
-        logger.info(f"[Ledger Service] Processing transaction for session_id: {checkout_request_id}")
+        logger.info("[Ledger Service] Processing transaction", extra=log_context)
 
         # Abort and log if the transaction failed
         if stk_callback.ResultCode != 0:
-            logger.warning(f"[Ledger Service] Transaction failed (ResultCode: {stk_callback.ResultCode}). "
-                           f"Aborting ledger append for session_id: {checkout_request_id}")
+            logger.warning(f"[Ledger Service] Transaction failed (ResultCode: {stk_callback.ResultCode}). Aborting ledger append.", extra=log_context)
             return
 
         # Extract fields from CallbackMetadata safely
@@ -32,8 +32,10 @@ class LedgerAutomationService:
                     phone_number = item.Value
 
         if not mpesa_receipt_number:
-            logger.error(f"[Ledger Service] Missing MpesaReceiptNumber for successful transaction {checkout_request_id}. Aborting.")
+            logger.error("[Ledger Service] Missing MpesaReceiptNumber for successful transaction. Aborting.", extra=log_context)
             return
+
+        log_context["mpesa_receipt_number"] = mpesa_receipt_number
 
         # Structure the ledger row
         ledger_entry = {
@@ -45,4 +47,4 @@ class LedgerAutomationService:
         }
 
         # Mock appending to central data sheet
-        logger.info(f"[Ledger Service] Successfully appended to ledger: {ledger_entry}")
+        logger.info(f"[Ledger Service] Successfully appended to ledger: {ledger_entry}", extra=log_context)

@@ -10,8 +10,9 @@ def test_health_check():
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
 
+@patch("asyncio.sleep")
 @patch("httpx.AsyncClient.post")
-def test_mpesa_callback_success(mock_post):
+def test_mpesa_callback_success(mock_post, mock_sleep):
     # Setup mock to simulate successful KRA response
     mock_response = MagicMock()
     mock_response.status_code = 200
@@ -40,7 +41,8 @@ def test_mpesa_callback_success(mock_post):
     assert response.status_code == 200
     assert response.json() == {"status": "success", "message": "Callback processed"}
 
-def test_mpesa_callback_failure_case():
+@patch("asyncio.sleep")
+def test_mpesa_callback_failure_case(mock_sleep):
     # Test how we handle a failed M-Pesa transaction (ResultCode != 0), which may lack CallbackMetadata
     payload = {
         "Body": {
@@ -57,8 +59,9 @@ def test_mpesa_callback_failure_case():
     assert response.status_code == 200
     assert response.json() == {"status": "success", "message": "Callback processed"}
 
+@patch("asyncio.sleep")
 @patch("httpx.AsyncClient.post")
-def test_mpesa_callback_idempotency(mock_post):
+def test_mpesa_callback_idempotency(mock_post, mock_sleep):
     # Setup mock to simulate successful KRA response for the first background execution
     mock_response = MagicMock()
     mock_response.status_code = 200

@@ -2,6 +2,8 @@ import logging
 import asyncio
 from fastapi import APIRouter, BackgroundTasks
 from app.schemas.mpesa import MpesaWebhookPayload
+from app.services.ledger import LedgerAutomationService
+from app.services.etims import ETIMSComplianceService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -14,8 +16,14 @@ async def process_compliance_pipeline(payload: MpesaWebhookPayload):
     checkout_request_id = payload.Body.stkCallback.CheckoutRequestID
     logger.info(f"[Background Task] Starting compliance pipeline for {checkout_request_id}")
 
+    # Execute Ledger Service mapping and append
+    await LedgerAutomationService.append_transaction_record(payload)
+
     # Mocking 1.5-second network latency spike (eTIMS API hand-shake)
     await asyncio.sleep(1.5)
+
+    # Execute ETIMS API submission
+    await ETIMSComplianceService.generate_electronic_invoice(payload)
 
     logger.info(f"[Background Task] Completed compliance pipeline for {checkout_request_id}")
 

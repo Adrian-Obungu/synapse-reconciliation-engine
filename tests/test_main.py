@@ -1,4 +1,5 @@
 import pytest
+from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
 from app.main import app
 
@@ -9,7 +10,14 @@ def test_health_check():
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
 
-def test_mpesa_callback_success():
+@patch("httpx.AsyncClient.post")
+def test_mpesa_callback_success(mock_post):
+    # Setup mock to simulate successful KRA response
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.raise_for_status.return_value = None
+    mock_post.return_value = mock_response
+
     payload = {
         "Body": {
             "stkCallback": {
@@ -49,7 +57,14 @@ def test_mpesa_callback_failure_case():
     assert response.status_code == 200
     assert response.json() == {"status": "success", "message": "Callback processed"}
 
-def test_mpesa_callback_idempotency():
+@patch("httpx.AsyncClient.post")
+def test_mpesa_callback_idempotency(mock_post):
+    # Setup mock to simulate successful KRA response for the first background execution
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.raise_for_status.return_value = None
+    mock_post.return_value = mock_response
+
     payload = {
         "Body": {
             "stkCallback": {

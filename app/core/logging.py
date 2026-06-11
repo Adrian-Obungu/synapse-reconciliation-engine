@@ -16,6 +16,8 @@ class JSONFormatter(logging.Formatter):
             log_obj["checkout_request_id"] = record.checkout_request_id
         if hasattr(record, "mpesa_receipt_number"):
             log_obj["mpesa_receipt_number"] = record.mpesa_receipt_number
+        if hasattr(record, "event_type"):
+            log_obj["event_type"] = record.event_type
 
         return json.dumps(log_obj)
 

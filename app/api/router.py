@@ -60,7 +60,9 @@ async def mpesa_callback(payload: MpesaWebhookPayload, background_tasks: Backgro
 
     # Idempotency check
     if checkout_request_id in PROCESSED_REQUESTS:
-        logger.info("Duplicate CheckoutRequestID detected. Skipping processing.", extra=log_context)
+        cache_hit_context = log_context.copy()
+        cache_hit_context["event_type"] = "CACHE_HIT"
+        logger.info("Duplicate CheckoutRequestID detected. Skipping processing.", extra=cache_hit_context)
         return {"status": "success", "message": "Callback processed"}
 
     # Lightweight eviction guard (Memory Management)

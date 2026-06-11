@@ -96,5 +96,10 @@ def test_mpesa_callback_idempotency(mock_post, mock_sleep):
     assert response1.status_code == 200
 
     # Second request (duplicate)
-    response2 = client.post("/api/v1/mpesa/callback", json=payload)
-    assert response2.status_code == 200
+    with patch("app.api.router.logger.info") as mock_logger_info:
+        response2 = client.post("/api/v1/mpesa/callback", json=payload)
+        assert response2.status_code == 200
+        mock_logger_info.assert_called_with(
+            "Duplicate CheckoutRequestID detected. Skipping processing.",
+            extra={"checkout_request_id": "ws_CO_191220191020363927", "event_type": "CACHE_HIT"}
+        )

@@ -92,8 +92,17 @@ def test_mpesa_callback_idempotency(mock_post, mock_sleep):
     }
 
     # First request
-    response1 = client.post("/api/v1/mpesa/callback", json=payload)
-    assert response1.status_code == 200
+    with patch("app.api.router.logger.info") as mock_logger_info:
+        response1 = client.post("/api/v1/mpesa/callback", json=payload)
+        assert response1.status_code == 200
+        # The router injects `async_lag_ms` into the log context dynamically
+        # Search through all calls to logger.info in the router specifically
+        found_lag = False
+        for call in mock_logger_info.call_args_list:
+            if "async_lag_ms" in call.kwargs.get("extra", {}):
+                found_lag = True
+                break
+        assert found_lag, "async_lag_ms not found in any logger.info call"
 
     # Second request (duplicate)
     with patch("app.api.router.logger.info") as mock_logger_info:

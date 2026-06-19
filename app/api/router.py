@@ -29,16 +29,16 @@ async def process_compliance_pipeline(payload: MpesaWebhookPayload):
 
     logger.info("[Background Task] Starting compliance pipeline", extra=log_context)
 
-    # Execute Ledger Service mapping and append
-    await LedgerAutomationService.append_transaction_record(payload)
+    try:
+        # Execute Ledger Service mapping and append
+        await LedgerAutomationService.append_transaction_record(payload)
 
-    # Mocking 1.5-second network latency spike (eTIMS API hand-shake)
-    await asyncio.sleep(1.5)
+        # Execute ETIMS API submission
+        await ETIMSComplianceService.generate_electronic_invoice(payload)
 
-    # Execute ETIMS API submission
-    await ETIMSComplianceService.generate_electronic_invoice(payload)
-
-    logger.info("[Background Task] Completed compliance pipeline", extra=log_context)
+        logger.info("[Background Task] Completed compliance pipeline", extra=log_context)
+    except Exception as e:
+        logger.error(f"[Background Task] Unhandled exception in compliance pipeline: {e}", extra=log_context)
 
 
 @router.get("/healthz")

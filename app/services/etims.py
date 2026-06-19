@@ -1,3 +1,4 @@
+import os
 import logging
 import asyncio
 import httpx
@@ -5,6 +6,17 @@ from app.schemas.mpesa import MpesaWebhookPayload
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+# Shared global HTTP client for connection pooling
+# Instantiated lazily or during app startup to avoid event loop issues
+shared_client = None
+
+def get_shared_client() -> httpx.AsyncClient:
+    global shared_client
+    if shared_client is None:
+        limits = httpx.Limits(max_keepalive_connections=100, max_connections=200)
+        shared_client = httpx.AsyncClient(limits=limits)
+    return shared_client
 
 class ETIMSComplianceService:
     @staticmethod
@@ -31,25 +43,35 @@ class ETIMSComplianceService:
             "status": "PAID"
         }
 
+        # MOCK_ETIMS environment variable toggle to bypass outbound network traffic
+        mock_etims = os.getenv("MOCK_ETIMS", "false").lower() == "true"
+
+        if mock_etims:
+            logger.info("[eTIMS Service] MOCK_ETIMS is enabled. Simulating API processing...", extra=log_context)
+            await asyncio.sleep(0.15)  # Simulate typical remote round-trip latency
+            logger.info("[eTIMS Service] Successfully posted invoice (MOCKED)", extra=log_context)
+            return
+
         url = "https://api.etims-mock.kra.go.ke/v1/invoices"
         max_retries = 3
 
-        async with httpx.AsyncClient() as client:
-            for attempt in range(1, max_retries + 1):
-                try:
-                    logger.info(f"[eTIMS Service] Attempt {attempt} to post invoice", extra=log_context)
-                    response = await client.post(url, json=etims_payload, timeout=10.0)
-                    response.raise_for_status()
-                    logger.info("[eTIMS Service] Successfully posted invoice", extra=log_context)
-                    return # Exit on success
-                except httpx.RequestError as exc:
-                    logger.warning(f"[eTIMS Service] Request error on attempt {attempt}: {exc}", extra=log_context)
-                except httpx.HTTPStatusError as exc:
-                    logger.warning(f"[eTIMS Service] HTTP error {exc.response.status_code} on attempt {attempt}", extra=log_context)
+        client = get_shared_client()
 
-                if attempt < max_retries:
-                    wait_time = 2 ** attempt
-                    logger.info(f"[eTIMS Service] Backing off for {wait_time} seconds before retrying...", extra=log_context)
-                    await asyncio.sleep(wait_time)
+        for attempt in range(1, max_retries + 1):
+            try:
+                logger.info(f"[eTIMS Service] Attempt {attempt} to post invoice", extra=log_context)
+                response = await client.post(url, json=etims_payload, timeout=10.0)
+                response.raise_for_status()
+                logger.info("[eTIMS Service] Successfully posted invoice", extra=log_context)
+                return # Exit on success
+            except httpx.RequestError as exc:
+                logger.warning(f"[eTIMS Service] Request error on attempt {attempt}: {exc}", extra=log_context)
+            except httpx.HTTPStatusError as exc:
+                logger.warning(f"[eTIMS Service] HTTP error {exc.response.status_code} on attempt {attempt}", extra=log_context)
 
-            logger.error(f"[eTIMS Service] Failed to post invoice after {max_retries} attempts.", extra=log_context)
+            if attempt < max_retries:
+                wait_time = 2 ** attempt
+                logger.info(f"[eTIMS Service] Backing off for {wait_time} seconds before retrying...", extra=log_context)
+                await asyncio.sleep(wait_time)
+
+        logger.error(f"[eTIMS Service] Failed to post invoice after {max_retries} attempts.", extra=log_context)

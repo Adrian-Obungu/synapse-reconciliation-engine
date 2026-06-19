@@ -8,11 +8,12 @@ class JSONFormatter(logging.Formatter):
             "timestamp": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(),
             "log_level": record.levelname,
             "module": record.name,
-            "message": record.getMessage(),
-            "hdd_baseline_write_mbps": 40.84
+            "message": record.getMessage()
         }
 
         # Inject any additional context (like CheckoutRequestID, MpesaReceiptNumber) passed via the `extra` dictionary
+        if hasattr(record, "hdd_baseline_write_mbps"):
+            log_obj["hdd_baseline_write_mbps"] = record.hdd_baseline_write_mbps
         if hasattr(record, "checkout_request_id"):
             log_obj["checkout_request_id"] = record.checkout_request_id
         if hasattr(record, "mpesa_receipt_number"):

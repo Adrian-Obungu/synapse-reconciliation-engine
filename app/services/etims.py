@@ -7,13 +7,16 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Shared global HTTP client for connection pooling
-# Instantiated lazily or during app startup to avoid event loop issues
-shared_client = None
+shared_client: httpx.AsyncClient = None
+
+def set_shared_client(client: httpx.AsyncClient):
+    global shared_client
+    shared_client = client
 
 def get_shared_client() -> httpx.AsyncClient:
     global shared_client
     if shared_client is None:
+        # Fallback safeguard with strict limits if accessed outside startup lifecycle
         limits = httpx.Limits(max_keepalive_connections=100, max_connections=200)
         shared_client = httpx.AsyncClient(limits=limits)
     return shared_client
@@ -43,10 +46,7 @@ class ETIMSComplianceService:
             "status": "PAID"
         }
 
-        # MOCK_ETIMS environment variable toggle to bypass outbound network traffic
-        mock_etims = os.getenv("MOCK_ETIMS", "false").lower() == "true"
-
-        if mock_etims:
+        if settings.mock_etims:
             logger.info("[eTIMS Service] MOCK_ETIMS is enabled. Simulating API processing...", extra=log_context)
             await asyncio.sleep(0.15)  # Simulate typical remote round-trip latency
             logger.info("[eTIMS Service] Successfully posted invoice (MOCKED)", extra=log_context)

@@ -1,5 +1,6 @@
 import logging
 import time
+import asyncio
 from app.schemas.mpesa import MpesaWebhookPayload
 
 logger = logging.getLogger(__name__)
@@ -48,18 +49,16 @@ class LedgerAutomationService:
         }
 
         # Mock appending to central data sheet
-        start_time = time.time()
+        start_time = time.perf_counter()
 
-        # simulated IO execution time
-        pass
+        # Real simulated disk operations latency injection for load tests
+        await asyncio.sleep(0.01) # Yield to event loop to simulate disk spin up
 
-        elapsed_time = time.time() - start_time
+        elapsed_time = time.perf_counter() - start_time
 
-        # Derived threshold from our HDD baseline 40.84 MB/s.
-        # Using a conservative 50ms latency threshold for small mock appends.
-        if elapsed_time > 0.05:
-            log_context["io_latency_warning"] = True
-        else:
-            log_context["io_latency_warning"] = False
+        # Flag downstream latency alerts accurately if it breaks threshold
+        log_context["io_latency_warning"] = elapsed_time > 0.05
+        # Inject explicit metric for downstream logs
+        log_context["hdd_baseline_write_mbps"] = 40.84
 
         logger.info(f"[Ledger Service] Successfully appended to ledger: {ledger_entry}", extra=log_context)

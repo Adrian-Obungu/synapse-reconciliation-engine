@@ -12,8 +12,11 @@ logger = logging.getLogger(__name__)
 # High-performance global dictionary block for Idempotency Guard
 PROCESSED_REQUESTS = {}
 
-async def process_compliance_pipeline(payload: MpesaWebhookPayload):
+async def process_compliance_pipeline(payload: MpesaWebhookPayload, enqueue_time: float):
     checkout_request_id = payload.Body.stkCallback.CheckoutRequestID
+
+    # Calculate async_lag_ms accurately right when the worker picks it up
+    async_lag_ms = (time.perf_counter() - enqueue_time) * 1000.0
 
     # Extract MpesaReceiptNumber for structured logging context
     mpesa_receipt_number = None
@@ -23,7 +26,10 @@ async def process_compliance_pipeline(payload: MpesaWebhookPayload):
                 mpesa_receipt_number = item.Value
                 break
 
-    log_context = {"checkout_request_id": checkout_request_id}
+    log_context = {
+        "checkout_request_id": checkout_request_id,
+        "async_lag_ms": round(async_lag_ms, 2)
+    }
     if mpesa_receipt_number:
         log_context["mpesa_receipt_number"] = mpesa_receipt_number
 
@@ -38,7 +44,8 @@ async def process_compliance_pipeline(payload: MpesaWebhookPayload):
 
         logger.info("[Background Task] Completed compliance pipeline", extra=log_context)
     except Exception as e:
-        logger.error(f"[Background Task] Unhandled exception in compliance pipeline: {e}", extra=log_context)
+        logger.exception(f"[Background Task] Unhandled exception in compliance pipeline: {e}", extra=log_context)
+        raise
 
 
 @router.get("/healthz")
@@ -56,7 +63,7 @@ async def health_check():
 
 @router.post("/callback")
 async def mpesa_callback(payload: MpesaWebhookPayload, background_tasks: BackgroundTasks):
-    start_time = time.time()
+    enqueue_time = time.perf_counter()
 
     checkout_request_id = payload.Body.stkCallback.CheckoutRequestID
     log_context = {"checkout_request_id": checkout_request_id}
@@ -65,7 +72,6 @@ async def mpesa_callback(payload: MpesaWebhookPayload, background_tasks: Backgro
     if checkout_request_id in PROCESSED_REQUESTS:
         cache_hit_context = log_context.copy()
         cache_hit_context["event_type"] = "CACHE_HIT"
-        # We don't need to log async_lag_ms for cached hits since it aborts early
         logger.info("Duplicate CheckoutRequestID detected. Skipping processing.", extra=cache_hit_context)
         return {"status": "success", "message": "Callback processed"}
 
@@ -78,11 +84,7 @@ async def mpesa_callback(payload: MpesaWebhookPayload, background_tasks: Backgro
     PROCESSED_REQUESTS[checkout_request_id] = True
 
     # Hand off payload processing to background worker
-    background_tasks.add_task(process_compliance_pipeline, payload)
-
-    # Calculate async_lag_ms to detect physical backpressure or event loop blocking
-    async_lag_ms = (time.time() - start_time) * 1000.0
-    log_context["async_lag_ms"] = round(async_lag_ms, 2)
+    background_tasks.add_task(process_compliance_pipeline, payload, enqueue_time)
 
     # Fast deterministic log
     logger.info("Received M-Pesa webhook", extra=log_context)

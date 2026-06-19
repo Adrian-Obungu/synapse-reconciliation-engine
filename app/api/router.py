@@ -1,5 +1,6 @@
 import logging
 import asyncio
+import time
 from fastapi import APIRouter, BackgroundTasks
 from app.schemas.mpesa import MpesaWebhookPayload
 from app.services.ledger import LedgerAutomationService
@@ -28,16 +29,16 @@ async def process_compliance_pipeline(payload: MpesaWebhookPayload):
 
     logger.info("[Background Task] Starting compliance pipeline", extra=log_context)
 
-    # Execute Ledger Service mapping and append
-    await LedgerAutomationService.append_transaction_record(payload)
+    try:
+        # Execute Ledger Service mapping and append
+        await LedgerAutomationService.append_transaction_record(payload)
 
-    # Mocking 1.5-second network latency spike (eTIMS API hand-shake)
-    await asyncio.sleep(1.5)
+        # Execute ETIMS API submission
+        await ETIMSComplianceService.generate_electronic_invoice(payload)
 
-    # Execute ETIMS API submission
-    await ETIMSComplianceService.generate_electronic_invoice(payload)
-
-    logger.info("[Background Task] Completed compliance pipeline", extra=log_context)
+        logger.info("[Background Task] Completed compliance pipeline", extra=log_context)
+    except Exception as e:
+        logger.error(f"[Background Task] Unhandled exception in compliance pipeline: {e}", extra=log_context)
 
 
 @router.get("/healthz")
@@ -55,6 +56,8 @@ async def health_check():
 
 @router.post("/callback")
 async def mpesa_callback(payload: MpesaWebhookPayload, background_tasks: BackgroundTasks):
+    start_time = time.time()
+
     checkout_request_id = payload.Body.stkCallback.CheckoutRequestID
     log_context = {"checkout_request_id": checkout_request_id}
 
@@ -62,6 +65,7 @@ async def mpesa_callback(payload: MpesaWebhookPayload, background_tasks: Backgro
     if checkout_request_id in PROCESSED_REQUESTS:
         cache_hit_context = log_context.copy()
         cache_hit_context["event_type"] = "CACHE_HIT"
+        # We don't need to log async_lag_ms for cached hits since it aborts early
         logger.info("Duplicate CheckoutRequestID detected. Skipping processing.", extra=cache_hit_context)
         return {"status": "success", "message": "Callback processed"}
 
@@ -73,11 +77,15 @@ async def mpesa_callback(payload: MpesaWebhookPayload, background_tasks: Backgro
     # Record request to block duplicates
     PROCESSED_REQUESTS[checkout_request_id] = True
 
-    # Fast deterministic log
-    logger.info("Received M-Pesa webhook", extra=log_context)
-
     # Hand off payload processing to background worker
     background_tasks.add_task(process_compliance_pipeline, payload)
+
+    # Calculate async_lag_ms to detect physical backpressure or event loop blocking
+    async_lag_ms = (time.time() - start_time) * 1000.0
+    log_context["async_lag_ms"] = round(async_lag_ms, 2)
+
+    # Fast deterministic log
+    logger.info("Received M-Pesa webhook", extra=log_context)
 
     # Return strict HTTP 200 OK acknowledgment per specs instantly
     return {"status": "success", "message": "Callback processed"}

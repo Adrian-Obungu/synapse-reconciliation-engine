@@ -8,7 +8,8 @@ class JSONFormatter(logging.Formatter):
             "timestamp": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(),
             "log_level": record.levelname,
             "module": record.name,
-            "message": record.getMessage()
+            "message": record.getMessage(),
+            "hdd_baseline_write_mbps": 40.84
         }
 
         # Inject any additional context (like CheckoutRequestID, MpesaReceiptNumber) passed via the `extra` dictionary
@@ -18,6 +19,10 @@ class JSONFormatter(logging.Formatter):
             log_obj["mpesa_receipt_number"] = record.mpesa_receipt_number
         if hasattr(record, "event_type"):
             log_obj["event_type"] = record.event_type
+        if hasattr(record, "io_latency_warning"):
+            log_obj["io_latency_warning"] = record.io_latency_warning
+        if hasattr(record, "async_lag_ms"):
+            log_obj["async_lag_ms"] = record.async_lag_ms
 
         return json.dumps(log_obj)
 

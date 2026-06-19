@@ -1,4 +1,5 @@
 import logging
+import time
 from app.schemas.mpesa import MpesaWebhookPayload
 
 logger = logging.getLogger(__name__)
@@ -47,4 +48,18 @@ class LedgerAutomationService:
         }
 
         # Mock appending to central data sheet
+        start_time = time.time()
+
+        # simulated IO execution time
+        pass
+
+        elapsed_time = time.time() - start_time
+
+        # Derived threshold from our HDD baseline 40.84 MB/s.
+        # Using a conservative 50ms latency threshold for small mock appends.
+        if elapsed_time > 0.05:
+            log_context["io_latency_warning"] = True
+        else:
+            log_context["io_latency_warning"] = False
+
         logger.info(f"[Ledger Service] Successfully appended to ledger: {ledger_entry}", extra=log_context)

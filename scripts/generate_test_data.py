@@ -3,7 +3,7 @@ import random
 import uuid
 from faker import Faker
 
-def generate_mpesa_payload(faker, checkout_request_id, is_duplicate=False, is_dirty_phone=False, is_failure=False):
+def generate_mpesa_payload(faker, checkout_request_id, is_dirty_phone=False, is_failure=False):
     merchant_request_id = str(uuid.uuid4())
 
     if is_failure:
@@ -17,22 +17,18 @@ def generate_mpesa_payload(faker, checkout_request_id, is_duplicate=False, is_di
         # Determine phone number format
         base_phone = faker.numerify('7########')
         if is_dirty_phone:
-            dirty_formats = [
-                f"0{base_phone}",       # 07... or 01...
-                f"+254{base_phone}",    # +254...
-                f"254{base_phone}",     # 254... (technically clean but included per prompt mix)
-            ]
             # Replace start with 1 or 7 for base
             if random.random() > 0.5:
                 base_phone = "1" + base_phone[1:]
 
-            format_choice = random.choice([
-                f"0{base_phone}",
-                f"+254{base_phone}",
-                f"254{base_phone}",
-                base_phone
-            ])
-            phone_number = format_choice
+            dirty_formats = [
+                f"0{base_phone}",       # 07... or 01...
+                f"+254{base_phone}",    # +254...
+                f"254{base_phone}",     # 254... (technically clean but included per prompt mix)
+                base_phone              # 7... or 1...
+            ]
+
+            phone_number = random.choice(dirty_formats)
         else:
             phone_number = f"254{base_phone}"
 
@@ -84,7 +80,6 @@ def main():
     payloads = []
 
     for idx, checkout_request_id in enumerate(all_checkout_ids):
-        is_duplicate = checkout_request_id in seen_ids
         seen_ids.add(checkout_request_id)
 
         is_failure = random.random() < FAILURE_RATIO
@@ -93,7 +88,6 @@ def main():
         payload = generate_mpesa_payload(
             faker=faker,
             checkout_request_id=checkout_request_id,
-            is_duplicate=is_duplicate,
             is_dirty_phone=is_dirty_phone,
             is_failure=is_failure
         )

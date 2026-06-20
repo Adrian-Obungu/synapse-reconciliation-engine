@@ -3,7 +3,7 @@ import httpx
 import json
 import uuid
 
-BASE_URL = "http://localhost:8000/api/v1/mpesa/callback"
+BASE_URL = "http://localhost:80/api/v1/mpesa/callback"
 
 def generate_payload(checkout_id: str, phone: any, result_code: int = 0, exclude_metadata: bool = False):
     merchant_id = str(uuid.uuid4())

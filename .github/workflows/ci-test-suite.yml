@@ -36,15 +36,15 @@ jobs:
         # We start the entire required subset of the stack using Docker Compose.
         # This guarantees Redis and Postgres boot up with init.sql, and healthchecks execute successfully.
         run: |
-          docker compose up -d postgres redis otel-collector app
+          docker compose up -d postgres redis otel-collector app nginx
 
       - name: Await App Container Readiness
-        # Wait for the FastAPI 'app' container to report healthy from its dependencies and bind to 8000.
+        # Wait for the Nginx proxy container to start routing successfully.
         # This prevents the simulation script from throwing Connection Refused.
         run: |
-          echo "Waiting for FastAPI container to bind to port 8000..."
-          timeout 30 bash -c 'while ! curl -s http://localhost:8000/api/v1/mpesa/healthz > /dev/null; do sleep 1; done'
-          echo "FastAPI container is ready and accepting traffic."
+          echo "Waiting for Nginx edge proxy to route traffic on port 80..."
+          timeout 30 bash -c 'while ! curl -s http://localhost:80/api/v1/mpesa/healthz > /dev/null; do sleep 1; done'
+          echo "Nginx proxy is ready and accepting traffic."
 
       - name: Execute End-to-End Simulation Harness
         # The simulate.py script requires the project root in its path, which is handled inherently by the execution context here,

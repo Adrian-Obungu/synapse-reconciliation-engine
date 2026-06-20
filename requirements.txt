@@ -7,3 +7,5 @@ httpx
 
 faker
 locust
+redis
+asyncpg

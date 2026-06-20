@@ -2,12 +2,14 @@ import logging
 import time
 import asyncio
 from app.schemas.mpesa import MpesaWebhookPayload
+from app.schemas.etims import ETIMSTransformer
+from app.services.storage import StorageEngine
 
 logger = logging.getLogger(__name__)
 
 class LedgerAutomationService:
     @staticmethod
-    async def append_transaction_record(payload: MpesaWebhookPayload):
+    async def append_transaction_record(payload: MpesaWebhookPayload, storage: StorageEngine):
         stk_callback = payload.Body.stkCallback
         checkout_request_id = stk_callback.CheckoutRequestID
         log_context = {"checkout_request_id": checkout_request_id}
@@ -39,26 +41,9 @@ class LedgerAutomationService:
 
         log_context["mpesa_receipt_number"] = mpesa_receipt_number
 
-        # Structure the ledger row
-        ledger_entry = {
-            "TransID": mpesa_receipt_number,
-            "SessionID": checkout_request_id,
-            "Amount": amount,
-            "NormalizedPhone": phone_number,
-            "Status": "COMPLETED"
-        }
+        # Structure the ledger payload dynamically via our standard schema
+        etims_schema = ETIMSTransformer.transform_daraja_to_etims(payload)
 
-        # Mock appending to central data sheet
-        start_time = time.perf_counter()
-
-        # Real simulated disk operations latency injection for load tests
-        await asyncio.sleep(0.01) # Yield to event loop to simulate disk spin up
-
-        elapsed_time = time.perf_counter() - start_time
-
-        # Flag downstream latency alerts accurately if it breaks threshold
-        log_context["io_latency_warning"] = elapsed_time > 0.05
-        # Inject explicit metric for downstream logs
-        log_context["hdd_baseline_write_mbps"] = 40.84
-
-        logger.info(f"[Ledger Service] Successfully appended to ledger: {ledger_entry}", extra=log_context)
+        # Let the StorageEngine handle the DB connection cleanly
+        await storage.commit_ledger_record(etims_schema)
+        logger.info(f"[Ledger Service] Append request dispatched to storage layer.", extra=log_context)

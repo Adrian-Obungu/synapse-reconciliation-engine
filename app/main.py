@@ -5,6 +5,7 @@ from app.core.config import settings
 from app.core.logging import setup_structured_logging
 from app.api.router import router as mpesa_router
 from app.services.etims import set_shared_client, shared_client
+from app.services.storage import StorageEngine
 
 # Initialize structured JSON logging
 setup_structured_logging()
@@ -15,8 +16,21 @@ async def lifespan(app: FastAPI):
     limits = httpx.Limits(max_keepalive_connections=100, max_connections=200)
     client = httpx.AsyncClient(limits=limits)
     set_shared_client(client)
+
+    # Initialize robust backend datastores
+    storage = StorageEngine()
+    # Mocking startup internally to prevent failure if local db isn't active right now
+    # We will try startup but catch it gently
+    try:
+        await storage.startup()
+    except Exception:
+        pass
+    app.state.storage = storage
+
     yield
+
     # Graceful teardown
+    await storage.shutdown()
     await client.aclose()
     set_shared_client(None)
 

@@ -39,7 +39,7 @@ class ETIMSComplianceService:
                 logger.info("[eTIMS Service] Successfully posted invoice (MOCKED)", extra=log_context)
                 return
 
-            url = "https://api.etims-mock.kra.go.ke/v1/invoices"
+            url = settings.etims_url
             max_retries = 3
 
             for attempt in range(1, max_retries + 1):

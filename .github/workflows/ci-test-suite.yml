@@ -36,7 +36,7 @@ jobs:
         # We start the entire required subset of the stack using Docker Compose.
         # This guarantees Redis and Postgres boot up with init.sql, and healthchecks execute successfully.
         run: |
-          docker compose up -d postgres redis otel-collector app nginx
+          docker compose up -d postgres redis etims-mock otel-collector app nginx
 
       - name: Await App Container Readiness
         # Wait for the Nginx proxy container to start routing successfully.

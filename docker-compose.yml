@@ -1,5 +1,11 @@
 version: '3.8'
 
+networks:
+  frontend-network:
+    driver: bridge
+  backend-network:
+    driver: bridge
+
 services:
   nginx:
     image: nginx:alpine
@@ -9,11 +15,14 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
       - app
+    networks:
+      - frontend-network
 
   app:
     build: .
     environment:
-      - MOCK_ETIMS=true
+      - MOCK_ETIMS=false
+      - ETIMS_URL=http://etims-mock:8080/saveVscu
       - REDIS_URL=redis://redis:6379/0
       - POSTGRES_DSN=postgresql://synapse_user:synapse_pass@postgres:5432/synapse
     depends_on:
@@ -24,6 +33,15 @@ services:
       otel-collector:
         condition: service_started
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    networks:
+      - frontend-network
+      - backend-network
+
+  etims-mock:
+    build: .
+    command: uvicorn mocks.etims_mock:app --host 0.0.0.0 --port 8080
+    networks:
+      - backend-network
 
   redis:
     image: redis:7-alpine
@@ -34,6 +52,8 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+    networks:
+      - backend-network
 
   postgres:
     image: postgres:15-alpine
@@ -50,6 +70,8 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+    networks:
+      - backend-network
 
   otel-collector:
     image: otel/opentelemetry-collector:latest
@@ -59,6 +81,8 @@ services:
     ports:
       - "4317:4317" # OTLP gRPC receiver
       - "4318:4318" # OTLP http receiver
+    networks:
+      - backend-network
 
   prometheus:
     image: prom/prometheus:latest
@@ -69,12 +93,16 @@ services:
       - --enable-feature=exemplar-storage
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - backend-network
 
   jaeger:
     image: jaegertracing/all-in-one:latest
     ports:
       - "16686:16686" # Jaeger UI
       - "14250:14250" # Model
+    networks:
+      - backend-network
 
   grafana:
     image: grafana/grafana:latest
@@ -88,3 +116,5 @@ services:
     depends_on:
       - prometheus
       - jaeger
+    networks:
+      - backend-network

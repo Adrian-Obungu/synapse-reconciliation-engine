@@ -1,6 +1,7 @@
 import os
 import logging
 import asyncio
+import random
 import httpx
 from app.schemas.mpesa import MpesaWebhookPayload
 from app.schemas.etims import ETIMSTransformer
@@ -51,11 +52,18 @@ class ETIMSComplianceService:
                 except httpx.RequestError as exc:
                     logger.warning(f"[eTIMS Service] Request error on attempt {attempt}: {exc}", extra=log_context)
                 except httpx.HTTPStatusError as exc:
-                    logger.warning(f"[eTIMS Service] HTTP error {exc.response.status_code} on attempt {attempt}", extra=log_context)
+                    # Only retry on 429 Too Many Requests or 5xx server errors
+                    if exc.response.status_code not in (429, 500, 502, 503, 504):
+                        logger.error(f"[eTIMS Service] Terminal HTTP error {exc.response.status_code}. Aborting.", extra=log_context)
+                        break
+                    logger.warning(f"[eTIMS Service] Upstream HTTP error {exc.response.status_code} on attempt {attempt}", extra=log_context)
 
                 if attempt < max_retries:
-                    wait_time = 2 ** attempt
-                    logger.info(f"[eTIMS Service] Backing off for {wait_time} seconds before retrying...", extra=log_context)
+                    # Exponential backoff: 2^attempt (2s, 4s) + random jitter (0 to 0.5s)
+                    jitter = random.uniform(0, 0.5)
+                    wait_time = (2 ** attempt) + jitter
+                    logger.info(f"[eTIMS Service] Backing off for {wait_time:.2f} seconds before retrying...", extra=log_context)
                     await asyncio.sleep(wait_time)
 
+            log_context["transaction_state"] = "FAILED_COMPLIANCE"
             logger.error(f"[eTIMS Service] Failed to post invoice after {max_retries} attempts.", extra=log_context)

@@ -1,0 +1,59 @@
+name: CI Test Suite
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-and-test:
+    name: Run Unit Tests & Integration Harness
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Execute Unit Test Matrix
+        run: |
+          pytest --asyncio-mode=auto
+
+      - name: Boot Persistence & Observability Stack
+        # We start the entire required subset of the stack using Docker Compose.
+        # This guarantees Redis and Postgres boot up with init.sql, and healthchecks execute successfully.
+        run: |
+          docker compose up -d postgres redis otel-collector app
+
+      - name: Await App Container Readiness
+        # Wait for the FastAPI 'app' container to report healthy from its dependencies and bind to 8000.
+        # This prevents the simulation script from throwing Connection Refused.
+        run: |
+          echo "Waiting for FastAPI container to bind to port 8000..."
+          timeout 30 bash -c 'while ! curl -s http://localhost:8000/api/v1/mpesa/healthz > /dev/null; do sleep 1; done'
+          echo "FastAPI container is ready and accepting traffic."
+
+      - name: Execute End-to-End Simulation Harness
+        # The simulate.py script requires the project root in its path, which is handled inherently by the execution context here,
+        # but we explicitly run it using python.
+        # Any failure in scenario logic (or if a scenario crashes via Exception) will bubble a non-zero exit code due to Python/sys limits.
+        run: |
+          python scripts/simulate.py
+
+      - name: Tear Down Stack
+        if: always()
+        run: |
+          docker compose down -v

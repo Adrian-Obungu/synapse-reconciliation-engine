@@ -9,3 +9,4 @@ faker
 locust
 redis
 asyncpg
+pytest-asyncio

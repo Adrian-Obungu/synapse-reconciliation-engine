@@ -51,16 +51,21 @@ async def run_scenarios():
     ]
 
     async with httpx.AsyncClient(timeout=10.0) as client:
+        import sys
+
         # Run scenarios 1 to 8 sequentially
         for name, payload in scenarios:
             try:
                 response = await client.post(BASE_URL, json=payload)
                 status = response.status_code
+                if status != 200:
+                    raise Exception(f"Expected 200 OK, got {status}: {response.text}")
                 print(f"✅ {name}")
                 print(f"   ↳ Status: {status}, Response: {response.json()}")
             except Exception as e:
                 print(f"❌ {name}")
                 print(f"   ↳ Error: {e}")
+                sys.exit(1)
 
         # Scenario 9: High-concurrency bulk load (50 concurrent requests)
         print("\n⏳ Executing Scenario 9: High-concurrency bulk load (50 concurrent requests)...")
@@ -72,11 +77,14 @@ async def run_scenarios():
         try:
             results = await asyncio.gather(*(send_req(p) for p in bulk_payloads))
             successes = sum(1 for r in results if r.status_code == 200)
+            if successes != 50:
+                raise Exception(f"Expected 50 successful requests, got {successes}.")
             print(f"✅ Scenario 9 Complete")
             print(f"   ↳ 50 requests fired simultaneously. {successes}/50 returned 200 OK.")
         except Exception as e:
             print(f"❌ Scenario 9 Failed")
             print(f"   ↳ Error during bulk dispatch: {e}")
+            sys.exit(1)
 
     print("\n🎉 Validation run finished. Check Docker logs for structural transformation accuracy and Redis atomic duplicate blocking.")
 

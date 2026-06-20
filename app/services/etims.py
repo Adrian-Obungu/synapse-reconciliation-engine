@@ -3,6 +3,7 @@ import logging
 import asyncio
 import httpx
 from app.schemas.mpesa import MpesaWebhookPayload
+from app.schemas.etims import ETIMSTransformer
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -39,12 +40,10 @@ class ETIMSComplianceService:
             logger.info("[eTIMS Service] Transaction failed. Skipping invoice generation.", extra=log_context)
             return
 
-        # Format mock payload for eTIMS
-        etims_payload = {
-            "sender_id": settings.etims_svd_sender_id,
-            "transaction_reference": checkout_request_id,
-            "status": "PAID"
-        }
+        # Map to precise eTIMS invoice schema natively, decoupling transport from payload logic
+        invoice_schema = ETIMSTransformer.transform_daraja_to_etims(payload)
+        # We use model_dump(mode="json") so Pydantic properly serializes the Decimal to a float/string compliant with standard JSON
+        etims_payload = invoice_schema.model_dump(mode="json")
 
         if settings.mock_etims:
             logger.info("[eTIMS Service] MOCK_ETIMS is enabled. Simulating API processing...", extra=log_context)

@@ -4,9 +4,16 @@ receivers:
       grpc:
       http:
 
+processors:
+  batch:
+    timeout: 1s
+    send_batch_size: 1024
+
 exporters:
   prometheus:
     endpoint: "0.0.0.0:8889"
+    # Ensure exemplars mapping passes through the OpenTelemetry exporter
+    send_timestamps: true
   jaeger:
     endpoint: "jaeger:14250"
     tls:
@@ -16,7 +23,9 @@ service:
   pipelines:
     traces:
       receivers: [otlp]
+      processors: [batch]
       exporters: [jaeger]
     metrics:
       receivers: [otlp]
+      processors: [batch]
       exporters: [prometheus]

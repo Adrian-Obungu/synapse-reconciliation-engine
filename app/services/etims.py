@@ -1,26 +1,17 @@
 import os
 import logging
 import asyncio
+import random
 import httpx
 from app.schemas.mpesa import MpesaWebhookPayload
+from app.schemas.etims import ETIMSTransformer
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Shared global HTTP client for connection pooling
-# Instantiated lazily or during app startup to avoid event loop issues
-shared_client = None
-
-def get_shared_client() -> httpx.AsyncClient:
-    global shared_client
-    if shared_client is None:
-        limits = httpx.Limits(max_keepalive_connections=100, max_connections=200)
-        shared_client = httpx.AsyncClient(limits=limits)
-    return shared_client
-
 class ETIMSComplianceService:
     @staticmethod
-    async def generate_electronic_invoice(payload: MpesaWebhookPayload):
+    async def generate_electronic_invoice(payload: MpesaWebhookPayload, client: httpx.AsyncClient, semaphore: asyncio.Semaphore):
         stk_callback = payload.Body.stkCallback
         checkout_request_id = stk_callback.CheckoutRequestID
         log_context = {"checkout_request_id": checkout_request_id}
@@ -36,42 +27,43 @@ class ETIMSComplianceService:
             logger.info("[eTIMS Service] Transaction failed. Skipping invoice generation.", extra=log_context)
             return
 
-        # Format mock payload for eTIMS
-        etims_payload = {
-            "sender_id": settings.etims_svd_sender_id,
-            "transaction_reference": checkout_request_id,
-            "status": "PAID"
-        }
+        # Map to precise eTIMS invoice schema natively, decoupling transport from payload logic
+        invoice_schema = ETIMSTransformer.transform_daraja_to_etims(payload)
+        # We use model_dump(mode="json") so Pydantic properly serializes the Decimal to a float/string compliant with standard JSON
+        etims_payload = invoice_schema.model_dump(mode="json")
 
-        # MOCK_ETIMS environment variable toggle to bypass outbound network traffic
-        mock_etims = os.getenv("MOCK_ETIMS", "false").lower() == "true"
+        async with semaphore:
+            if settings.mock_etims:
+                logger.info("[eTIMS Service] MOCK_ETIMS is enabled. Simulating API processing...", extra=log_context)
+                await asyncio.sleep(0.15)  # Simulate typical remote round-trip latency
+                logger.info("[eTIMS Service] Successfully posted invoice (MOCKED)", extra=log_context)
+                return
 
-        if mock_etims:
-            logger.info("[eTIMS Service] MOCK_ETIMS is enabled. Simulating API processing...", extra=log_context)
-            await asyncio.sleep(0.15)  # Simulate typical remote round-trip latency
-            logger.info("[eTIMS Service] Successfully posted invoice (MOCKED)", extra=log_context)
-            return
+            url = "https://api.etims-mock.kra.go.ke/v1/invoices"
+            max_retries = 3
 
-        url = "https://api.etims-mock.kra.go.ke/v1/invoices"
-        max_retries = 3
+            for attempt in range(1, max_retries + 1):
+                try:
+                    logger.info(f"[eTIMS Service] Attempt {attempt} to post invoice", extra=log_context)
+                    response = await client.post(url, json=etims_payload, timeout=10.0)
+                    response.raise_for_status()
+                    logger.info("[eTIMS Service] Successfully posted invoice", extra=log_context)
+                    return # Exit on success
+                except httpx.RequestError as exc:
+                    logger.warning(f"[eTIMS Service] Request error on attempt {attempt}: {exc}", extra=log_context)
+                except httpx.HTTPStatusError as exc:
+                    # Only retry on 429 Too Many Requests or 5xx server errors
+                    if exc.response.status_code not in (429, 500, 502, 503, 504):
+                        logger.error(f"[eTIMS Service] Terminal HTTP error {exc.response.status_code}. Aborting.", extra=log_context)
+                        break
+                    logger.warning(f"[eTIMS Service] Upstream HTTP error {exc.response.status_code} on attempt {attempt}", extra=log_context)
 
-        client = get_shared_client()
+                if attempt < max_retries:
+                    # Exponential backoff: 2^attempt (2s, 4s) + random jitter (0 to 0.5s)
+                    jitter = random.uniform(0, 0.5)
+                    wait_time = (2 ** attempt) + jitter
+                    logger.info(f"[eTIMS Service] Backing off for {wait_time:.2f} seconds before retrying...", extra=log_context)
+                    await asyncio.sleep(wait_time)
 
-        for attempt in range(1, max_retries + 1):
-            try:
-                logger.info(f"[eTIMS Service] Attempt {attempt} to post invoice", extra=log_context)
-                response = await client.post(url, json=etims_payload, timeout=10.0)
-                response.raise_for_status()
-                logger.info("[eTIMS Service] Successfully posted invoice", extra=log_context)
-                return # Exit on success
-            except httpx.RequestError as exc:
-                logger.warning(f"[eTIMS Service] Request error on attempt {attempt}: {exc}", extra=log_context)
-            except httpx.HTTPStatusError as exc:
-                logger.warning(f"[eTIMS Service] HTTP error {exc.response.status_code} on attempt {attempt}", extra=log_context)
-
-            if attempt < max_retries:
-                wait_time = 2 ** attempt
-                logger.info(f"[eTIMS Service] Backing off for {wait_time} seconds before retrying...", extra=log_context)
-                await asyncio.sleep(wait_time)
-
-        logger.error(f"[eTIMS Service] Failed to post invoice after {max_retries} attempts.", extra=log_context)
+            log_context["transaction_state"] = "FAILED_COMPLIANCE"
+            logger.error(f"[eTIMS Service] Failed to post invoice after {max_retries} attempts.", extra=log_context)

@@ -1,12 +1,15 @@
 import logging
 import time
+import asyncio
 from app.schemas.mpesa import MpesaWebhookPayload
+from app.schemas.etims import ETIMSTransformer
+from app.services.storage import StorageEngine
 
 logger = logging.getLogger(__name__)
 
 class LedgerAutomationService:
     @staticmethod
-    async def append_transaction_record(payload: MpesaWebhookPayload):
+    async def append_transaction_record(payload: MpesaWebhookPayload, storage: StorageEngine):
         stk_callback = payload.Body.stkCallback
         checkout_request_id = stk_callback.CheckoutRequestID
         log_context = {"checkout_request_id": checkout_request_id}
@@ -38,28 +41,9 @@ class LedgerAutomationService:
 
         log_context["mpesa_receipt_number"] = mpesa_receipt_number
 
-        # Structure the ledger row
-        ledger_entry = {
-            "TransID": mpesa_receipt_number,
-            "SessionID": checkout_request_id,
-            "Amount": amount,
-            "NormalizedPhone": phone_number,
-            "Status": "COMPLETED"
-        }
+        # Structure the ledger payload dynamically via our standard schema
+        etims_schema = ETIMSTransformer.transform_daraja_to_etims(payload)
 
-        # Mock appending to central data sheet
-        start_time = time.time()
-
-        # simulated IO execution time
-        pass
-
-        elapsed_time = time.time() - start_time
-
-        # Derived threshold from our HDD baseline 40.84 MB/s.
-        # Using a conservative 50ms latency threshold for small mock appends.
-        if elapsed_time > 0.05:
-            log_context["io_latency_warning"] = True
-        else:
-            log_context["io_latency_warning"] = False
-
-        logger.info(f"[Ledger Service] Successfully appended to ledger: {ledger_entry}", extra=log_context)
+        # Let the StorageEngine handle the DB connection cleanly
+        await storage.commit_ledger_record(etims_schema)
+        logger.info(f"[Ledger Service] Append request dispatched to storage layer.", extra=log_context)

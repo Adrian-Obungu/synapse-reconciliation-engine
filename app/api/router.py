@@ -1,7 +1,7 @@
 import logging
 import asyncio
 import time
-from fastapi import APIRouter, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks, Request
 from app.schemas.mpesa import MpesaWebhookPayload
 from app.services.ledger import LedgerAutomationService
 from app.services.etims import ETIMSComplianceService
@@ -9,11 +9,11 @@ from app.services.etims import ETIMSComplianceService
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-# High-performance global dictionary block for Idempotency Guard
-PROCESSED_REQUESTS = {}
-
-async def process_compliance_pipeline(payload: MpesaWebhookPayload):
+async def process_compliance_pipeline(payload: MpesaWebhookPayload, enqueue_time: float, request: Request):
     checkout_request_id = payload.Body.stkCallback.CheckoutRequestID
+
+    # Calculate async_lag_ms accurately right when the worker picks it up
+    async_lag_ms = (time.perf_counter() - enqueue_time) * 1000.0
 
     # Extract MpesaReceiptNumber for structured logging context
     mpesa_receipt_number = None
@@ -23,7 +23,10 @@ async def process_compliance_pipeline(payload: MpesaWebhookPayload):
                 mpesa_receipt_number = item.Value
                 break
 
-    log_context = {"checkout_request_id": checkout_request_id}
+    log_context = {
+        "checkout_request_id": checkout_request_id,
+        "async_lag_ms": round(async_lag_ms, 2)
+    }
     if mpesa_receipt_number:
         log_context["mpesa_receipt_number"] = mpesa_receipt_number
 
@@ -31,14 +34,19 @@ async def process_compliance_pipeline(payload: MpesaWebhookPayload):
 
     try:
         # Execute Ledger Service mapping and append
-        await LedgerAutomationService.append_transaction_record(payload)
+        await LedgerAutomationService.append_transaction_record(payload, request.app.state.storage)
 
         # Execute ETIMS API submission
-        await ETIMSComplianceService.generate_electronic_invoice(payload)
+        await ETIMSComplianceService.generate_electronic_invoice(
+            payload,
+            request.app.state.http_client,
+            request.app.state.etims_semaphore
+        )
 
         logger.info("[Background Task] Completed compliance pipeline", extra=log_context)
     except Exception as e:
-        logger.error(f"[Background Task] Unhandled exception in compliance pipeline: {e}", extra=log_context)
+        logger.exception(f"[Background Task] Unhandled exception in compliance pipeline: {e}", extra=log_context)
+        raise
 
 
 @router.get("/healthz")
@@ -46,43 +54,28 @@ async def health_check():
     return {
         "status": "healthy",
         "metrics": {
-            "cache_utilization": {
-                "current_count": len(PROCESSED_REQUESTS),
-                "maximum_capacity": 1000
-            }
+            "storage_layer": "active"
         }
     }
 
 
 @router.post("/callback")
-async def mpesa_callback(payload: MpesaWebhookPayload, background_tasks: BackgroundTasks):
-    start_time = time.time()
+async def mpesa_callback(payload: MpesaWebhookPayload, background_tasks: BackgroundTasks, request: Request):
+    enqueue_time = time.perf_counter()
 
     checkout_request_id = payload.Body.stkCallback.CheckoutRequestID
     log_context = {"checkout_request_id": checkout_request_id}
 
-    # Idempotency check
-    if checkout_request_id in PROCESSED_REQUESTS:
+    # Atomic Idempotency Check via Redis layer
+    is_novel = await request.app.state.storage.check_idempotency(checkout_request_id)
+    if not is_novel:
         cache_hit_context = log_context.copy()
         cache_hit_context["event_type"] = "CACHE_HIT"
-        # We don't need to log async_lag_ms for cached hits since it aborts early
         logger.info("Duplicate CheckoutRequestID detected. Skipping processing.", extra=cache_hit_context)
         return {"status": "success", "message": "Callback processed"}
 
-    # Lightweight eviction guard (Memory Management)
-    if len(PROCESSED_REQUESTS) >= 1000:
-        oldest_key = next(iter(PROCESSED_REQUESTS))
-        PROCESSED_REQUESTS.pop(oldest_key)
-
-    # Record request to block duplicates
-    PROCESSED_REQUESTS[checkout_request_id] = True
-
     # Hand off payload processing to background worker
-    background_tasks.add_task(process_compliance_pipeline, payload)
-
-    # Calculate async_lag_ms to detect physical backpressure or event loop blocking
-    async_lag_ms = (time.time() - start_time) * 1000.0
-    log_context["async_lag_ms"] = round(async_lag_ms, 2)
+    background_tasks.add_task(process_compliance_pipeline, payload, enqueue_time, request)
 
     # Fast deterministic log
     logger.info("Received M-Pesa webhook", extra=log_context)

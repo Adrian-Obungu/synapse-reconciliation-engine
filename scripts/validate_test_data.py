@@ -1,5 +1,11 @@
 import json
+import sys
+from pathlib import Path
 from pydantic import ValidationError
+
+# Dynamically inject the repository root into sys.path to allow standalone execution on Windows/Linux
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from app.schemas.mpesa import MpesaWebhookPayload
 
 def validate_data():

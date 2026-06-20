@@ -37,7 +37,11 @@ async def process_compliance_pipeline(payload: MpesaWebhookPayload, enqueue_time
         await LedgerAutomationService.append_transaction_record(payload, request.app.state.storage)
 
         # Execute ETIMS API submission
-        await ETIMSComplianceService.generate_electronic_invoice(payload)
+        await ETIMSComplianceService.generate_electronic_invoice(
+            payload,
+            request.app.state.http_client,
+            request.app.state.etims_semaphore
+        )
 
         logger.info("[Background Task] Completed compliance pipeline", extra=log_context)
     except Exception as e:

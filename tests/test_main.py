@@ -4,12 +4,17 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.services.storage import StorageEngine
 
+import asyncio
+
 # Mock the storage engine so tests run cleanly without needing Redis or Postgres
 mock_storage = AsyncMock(spec=StorageEngine)
 # Simulate novel request explicitly
 mock_storage.check_idempotency.return_value = True
 
 app.state.storage = mock_storage
+app.state.http_client = AsyncMock()
+app.state.etims_semaphore = asyncio.Semaphore(200)
+
 client = TestClient(app)
 
 def test_health_check():

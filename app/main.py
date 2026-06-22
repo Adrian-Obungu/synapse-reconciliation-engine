@@ -6,6 +6,7 @@ from app.core.config import settings
 from app.core.logging import setup_structured_logging
 from app.api.router import router as mpesa_router
 from app.services.storage import StorageEngine
+from prometheus_fastapi_instrumentator import Instrumentator
 
 # Initialize structured JSON logging
 setup_structured_logging()
@@ -41,5 +42,8 @@ async def lifespan(app: FastAPI):
     await app.state.http_client.aclose()
 
 app = FastAPI(title=settings.project_name, lifespan=lifespan)
+
+# Instrument the FastAPI app for Prometheus metrics and expose the /metrics endpoint
+Instrumentator().instrument(app).expose(app)
 
 app.include_router(mpesa_router, prefix="/api/v1/mpesa", tags=["mpesa"])

@@ -10,3 +10,4 @@ locust
 redis
 asyncpg
 pytest-asyncio
+prometheus-fastapi-instrumentator

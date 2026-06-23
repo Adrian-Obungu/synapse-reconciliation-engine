@@ -2,6 +2,7 @@ import httpx
 import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from prometheus_fastapi_instrumentator import Instrumentator  # <-- 1. Added Instrumentator import
 from app.core.config import settings
 from app.core.logging import setup_structured_logging
 from app.api.router import router as mpesa_router
@@ -41,5 +42,8 @@ async def lifespan(app: FastAPI):
     await app.state.http_client.aclose()
 
 app = FastAPI(title=settings.project_name, lifespan=lifespan)
+
+# 2. Added Instrumentator attachment to auto-expose /metrics on startup
+Instrumentator().instrument(app).expose(app, endpoint="/metrics")
 
 app.include_router(mpesa_router, prefix="/api/v1/mpesa", tags=["mpesa"])

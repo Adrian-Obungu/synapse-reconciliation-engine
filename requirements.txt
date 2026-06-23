@@ -9,3 +9,4 @@ faker
 locust
 redis
 asyncpg
+prometheus-fastapi-instrumentator>=6.1.0

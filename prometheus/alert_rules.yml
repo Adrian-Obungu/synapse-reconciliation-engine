@@ -1,0 +1,33 @@
+groups:
+  - name: security_alerts
+    rules:
+      - alert: HighAuthenticationFailures
+        # BUGFIX: Converted bare counter to delta tracking. 
+        # Fires immediately if more than 3 authentication failures happen in a 1-minute rolling window.
+        expr: increase(http_requests_total{status="401"}[1m]) > 3
+        for: 0s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Brute force attack signature detected on Synapse API"
+          description: "Auth endpoint registered {{ $value }} failures within the last minute."
+
+      - alert: HighLatencyAnomaly
+        # BUGFIX: Dropped evaluation soak window from 30s to 5s so rapid simulation bursts trigger instantly.
+        expr: http_request_duration_seconds_count > 0 and (sum(rate(http_request_duration_seconds_sum[1m])) / sum(rate(http_request_duration_seconds_count[1m]))) > 0.5
+        for: 5s
+        labels:
+          severity: warning
+        annotations:
+          summary: "API Latency spike breaking SLA limits"
+          description: "Average request latency is currently {{ $value }}s."
+
+      - alert: AppDown
+        # BUGFIX: Added targeted job classification and dropped window from 1m to 10s for rapid local testing loops.
+        expr: up{job="synapse-core-app"} == 0
+        for: 10s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Instance {{ $labels.instance }} is down"
+          description: "Synapse core service has been unreachable for more than 10 seconds."

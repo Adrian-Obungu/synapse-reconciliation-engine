@@ -1,0 +1,92 @@
+{
+  "id": null,
+  "uid": "synapse_live_overview",
+  "title": "Synapse Live Performance",
+  "tags": [],
+  "style": "dark",
+  "timezone": "browser",
+  "editable": true,
+  "refresh": "5s",
+  "schemaVersion": 36,
+  "version": 1,
+  "panels": [
+    {
+      "title": "Application Uptime Status",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 0 },
+      "targets": [{ "expr": "up{job='synapse-core-app'}", "refId": "A" }],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": { "color": "red", "index": 1, "text": "OFFLINE" },
+                "1": { "color": "green", "index": 0, "text": "ONLINE" }
+              }
+            }
+          ],
+          "thresholds": { 
+            "mode": "absolute", 
+            "steps": [
+              { "color": "red", "value": null }, 
+              { "color": "green", "value": 1 }
+            ] 
+          }
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      }
+    },
+    {
+      "title": "HTTP Request Volume (Rate / sec)",
+      "type": "timeseries",
+      "gridPos": { "h": 6, "w": 16, "x": 8, "y": 0 },
+      "targets": [{ "expr": "(sum(rate(http_requests_total{handler!='/metrics'}[1m])) by (handler)) or vector(0)", "refId": "A" }],
+      "fieldConfig": { 
+        "defaults": { 
+          "unit": "reqps",
+          "color": { "mode": "palette-classic" }
+        } 
+      },
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        }
+      }
+    },
+    {
+      "title": "Security Anomalies Detector",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 6 },
+      "targets": [{ "expr": "(sum(rate(synapse_security_anomalies_total[1m])) by (handler)) or vector(0)", "refId": "A" }],
+      "fieldConfig": { 
+        "defaults": { 
+          "color": { "mode": "fixed", "fixedColor": "red" }
+        } 
+      },
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        }
+      }
+    }
+  ]
+}

@@ -2,6 +2,7 @@
 import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
 from app.core.config import settings
 from app.core.logging import setup_structured_logging
@@ -41,6 +42,15 @@ async def lifespan(app: FastAPI):
     await app.state.http_client.aclose()
 
 app = FastAPI(title=settings.project_name, lifespan=lifespan)
+
+# Enforce Global CORS Middleware Policy to accept frontend handshake
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Expose telemetry metrics endpoints
 Instrumentator().instrument(app).expose(app, endpoint="/metrics")

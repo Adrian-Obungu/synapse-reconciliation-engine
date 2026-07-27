@@ -217,3 +217,11 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 scripts/load_test_data.json
+
+# Local Development Tunneling
+ngrok.exe
+ngrok.zip
+
+# Frontend Dependencies & Builds
+frontend/node_modules/
+frontend/dist/

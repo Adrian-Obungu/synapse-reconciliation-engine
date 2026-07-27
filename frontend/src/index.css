@@ -1,0 +1,466 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import 'tailwindcss';
+
+/* =========================================================================
+   Synapse Reconciliation Engine — Design System Tokens
+   ========================================================================= */
+
+/*
+ * Tailwind v4 @theme directive — registers our custom color palette.
+ * By only defining these colors, we automatically exclude all default
+ * Tailwind indigo/purple/blue tokens from the generated CSS.
+ */
+@theme {
+  /* Background surfaces */
+  --color-midnight-950: #0B0F19;
+  --color-midnight-900: #111827;
+  --color-surface: #1E293B;
+  --color-surface-elevated: #263548;
+
+  /* Slate scale (borders, scrollbars, muted text) */
+  --color-slate-50: #F8FAFC;
+  --color-slate-100: #F1F5F9;
+  --color-slate-200: #E2E8F0;
+  --color-slate-300: #CBD5E1;
+  --color-slate-400: #94A3B8;
+  --color-slate-500: #64748B;
+  --color-slate-600: #475569;
+  --color-slate-700: #334155;
+  --color-slate-800: #1E293B;
+  --color-slate-900: #0F172A;
+
+  /* Primary — Emerald scale (brand accent) */
+  --color-emerald-400: #34D399;
+  --color-emerald-500: #10B981;
+  --color-emerald-600: #059669;
+  --color-emerald-700: #047857;
+  --color-emerald-800: #065F46;
+
+  /* Warning — Amber scale */
+  --color-amber-400: #F59E0B;
+  --color-amber-500: #EAB308;
+  --color-amber-600: #D97706;
+
+  /* Destructive — Coral/Red scale */
+  --color-coral-500: #EF4444;
+  --color-coral-600: #DC2626;
+  --color-coral-700: #B91C1C;
+
+  /* Typography */
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+
+  /* Spacing/sizing tokens */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+}
+
+/* =========================================================================
+   CSS Custom Properties (Root Variables)
+   ========================================================================= */
+
+:root {
+  /* Background hierarchy */
+  --color-bg-base: #0B0F19;
+  --color-bg-surface: #1E293B;
+  --color-bg-surface-elevated: #263548;
+
+  /* Primary accent scale */
+  --color-primary-400: #34D399;
+  --color-primary-500: #10B981;
+  --color-primary-600: #059669;
+  --color-primary-700: #047857;
+  --color-primary-800: #065F46;
+
+  /* Warning scale */
+  --color-warning-400: #F59E0B;
+  --color-warning-600: #D97706;
+
+  /* Destructive scale */
+  --color-destructive-500: #EF4444;
+  --color-destructive-600: #DC2626;
+
+  /* Text hierarchy */
+  --color-text-primary: #F1F5F9;
+  --color-text-secondary: #94A3B8;
+  --color-text-muted: #64748B;
+
+  /* Borders */
+  --color-border: #334155;
+  --color-border-focus: #10B981;
+}
+
+/* =========================================================================
+   Global Base Styles
+   ========================================================================= */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  background-color: var(--color-bg-base);
+  color: var(--color-text-primary);
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* =========================================================================
+   Focus-Visible Outline Rings (Emerald Accent)
+   ========================================================================= */
+
+/*
+ * All interactive elements receive an emerald outline ring on focus-visible,
+ * ensuring keyboard navigation is both accessible and on-brand.
+ */
+:focus-visible {
+  outline: 2px solid var(--color-primary-500);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* Remove default focus outline for mouse/touch interactions */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* =========================================================================
+   Custom Scrollbars — Scoped to .ledger-scroll containers
+   ========================================================================= */
+
+/*
+ * Narrow slate-themed scrollbars for data ledger/table views.
+ * Dual-engine approach: Webkit (Chrome, Edge, Safari) + Firefox.
+ */
+
+/* Webkit (Chrome, Edge, Safari) */
+.ledger-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.ledger-scroll::-webkit-scrollbar-track {
+  background: var(--color-bg-surface);
+  border-radius: 4px;
+}
+
+.ledger-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 4px;
+  border: 1px solid var(--color-bg-surface);
+}
+
+.ledger-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--color-primary-500);
+}
+
+.ledger-scroll::-webkit-scrollbar-corner {
+  background: var(--color-bg-surface);
+}
+
+/* Firefox */
+.ledger-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) var(--color-bg-surface);
+}
+
+/* =========================================================================
+   Selection Styles
+   ========================================================================= */
+
+::selection {
+  background-color: var(--color-primary-700);
+  color: var(--color-text-primary);
+}
+
+/* =========================================================================
+   Utility Classes
+   ========================================================================= */
+
+/* Animated gradient shimmer for loading states */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--color-bg-surface) 25%,
+    var(--color-bg-surface-elevated) 50%,
+    var(--color-bg-surface) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+/* Subtle fade-in animation for page transitions */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* Pulse animation for status indicators */
+@keyframes pulse-dot {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.animate-pulse-dot {
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+/* =========================================================================
+   Phase 2 — Toast Notifications
+   ========================================================================= */
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes toastOut {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+}
+
+@keyframes toast-progress {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
+.animate-toast-in {
+  animation: toastIn 0.3s ease-out;
+}
+
+.animate-toast-out {
+  animation: toastOut 0.3s ease-in forwards;
+}
+
+/* =========================================================================
+   Phase 2 — Accordion Expand/Collapse
+   ========================================================================= */
+
+.accordion-panel {
+  overflow: hidden;
+  transition: max-height 0.3s ease-out, opacity 0.2s ease-out;
+}
+
+.accordion-panel[data-expanded='false'] {
+  max-height: 0;
+  opacity: 0;
+}
+
+.accordion-panel[data-expanded='true'] {
+  max-height: 400px;
+  opacity: 1;
+}
+
+/* =========================================================================
+   Phase 2 — Modal Overlay
+   ========================================================================= */
+
+@keyframes modalBackdropIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes modalContentIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.modal-backdrop {
+  animation: modalBackdropIn 0.2s ease-out;
+}
+
+.modal-content {
+  animation: modalContentIn 0.2s ease-out;
+}
+
+/* =========================================================================
+   Phase 2 — OTP Step Transitions
+   ========================================================================= */
+
+@keyframes slideLeft {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideRight {
+  from {
+    opacity: 0;
+    transform: translateX(-24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-slide-left {
+  animation: slideLeft 0.3s ease-out;
+}
+
+.animate-slide-right {
+  animation: slideRight 0.3s ease-out;
+}
+
+/* =========================================================================
+   Phase 2 — OTP Digit Box
+   ========================================================================= */
+
+.otp-digit {
+  width: 3rem;
+  height: 3.5rem;
+  text-align: center;
+  font-size: 1.5rem;
+  font-weight: 600;
+  font-family: 'Inter', monospace;
+  color: var(--color-text-primary);
+  background: var(--color-bg-surface);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-md);
+  caret-color: var(--color-primary-500);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.otp-digit:focus {
+  outline: none;
+  border-color: var(--color-primary-500);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+}
+
+.otp-digit::selection {
+  background: transparent;
+}
+
+/* =========================================================================
+   Phase 2 — Drag-and-Drop Zone
+   ========================================================================= */
+
+.dropzone-idle {
+  border: 2px dashed var(--color-border);
+  transition: border-color 0.2s ease, transform 0.2s ease, background-color 0.2s ease;
+}
+
+.dropzone-active {
+  border-color: var(--color-primary-500);
+  background-color: rgba(16, 185, 129, 0.05);
+  transform: scale(1.01);
+}
+
+.dropzone-error {
+  border-color: var(--color-destructive-500);
+  background-color: rgba(239, 68, 68, 0.05);
+}
+
+.dropzone-success {
+  border-color: var(--color-primary-500);
+  background-color: rgba(16, 185, 129, 0.05);
+}
+
+/* =========================================================================
+   Phase 2 — Sort Arrow Indicators
+   ========================================================================= */
+
+.sort-header {
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.15s ease;
+}
+
+.sort-header:hover {
+  color: var(--color-text-primary);
+}
+
+.sort-arrow {
+  display: inline-block;
+  margin-left: 4px;
+  font-size: 0.65rem;
+  opacity: 0.4;
+  transition: opacity 0.15s ease;
+}
+
+.sort-arrow.active {
+  opacity: 1;
+  color: var(--color-primary-500);
+}
+
+/* =========================================================================
+   Phase 2 — Sidebar Transitions
+   ========================================================================= */
+
+.sidebar-transition {
+  transition: width 0.2s ease-in-out;
+}
+
+.sidebar-label {
+  transition: opacity 0.15s ease, width 0.15s ease;
+  overflow: hidden;
+  white-space: nowrap;
+}

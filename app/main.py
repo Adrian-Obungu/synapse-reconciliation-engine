@@ -1,11 +1,13 @@
-import httpx
+﻿import httpx
 import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
-from prometheus_fastapi_instrumentator import Instrumentator  # <-- 1. Added Instrumentator import
+from fastapi.middleware.cors import CORSMiddleware
+from prometheus_fastapi_instrumentator import Instrumentator
 from app.core.config import settings
 from app.core.logging import setup_structured_logging
 from app.api.router import router as mpesa_router
+from app.api.otp import router as otp_router
 from app.services.storage import StorageEngine
 
 # Initialize structured JSON logging
@@ -27,8 +29,6 @@ async def lifespan(app: FastAPI):
 
     # Initialize robust backend datastores
     storage = StorageEngine()
-    # Mocking startup internally to prevent failure if local db isn't active right now
-    # We will try startup but catch it gently
     try:
         await storage.startup()
     except Exception:
@@ -43,7 +43,18 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title=settings.project_name, lifespan=lifespan)
 
-# 2. Added Instrumentator attachment to auto-expose /metrics on startup
+# Enforce Global CORS Middleware Policy to accept frontend handshake
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Expose telemetry metrics endpoints
 Instrumentator().instrument(app).expose(app, endpoint="/metrics")
 
+# Secure API Router Mounting Points
 app.include_router(mpesa_router, prefix="/api/v1/mpesa", tags=["mpesa"])
+app.include_router(otp_router, prefix="/api/v1/otp", tags=["auth"])
